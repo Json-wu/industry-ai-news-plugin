@@ -1,0 +1,14 @@
+# 供 Supabase CLI 使用：`supabase db push`、`supabase functions deploy` 等。
+# 与远程项目关联：在仓库根执行 `supabase link --project-ref <项目 ref>`（会写入/校正 project_id）。
+
+project_id = "local"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+# 定时邮件简报：仅校验自定义 Header，不用用户 JWT。
+[functions.send-news-email-digest]
+verify_jwt = false

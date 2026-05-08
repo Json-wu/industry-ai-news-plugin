@@ -1,0 +1,32 @@
+# 定时调用 Supabase Edge「邮件简报」：需在仓库 Secrets 中配置
+#   EMAIL_DIGEST_URL = https://<project-ref>.supabase.co/functions/v1/send-news-email-digest
+#   EMAIL_DIGEST_CRON_SECRET = 与 Supabase Edge Secret EMAIL_DIGEST_CRON_SECRET 相同的随机串
+# 并在 Supabase 配置 Edge Secrets：RESEND_API_KEY、EMAIL_FROM（可选）、SUPABASE_SERVICE_ROLE_KEY、EMAIL_DIGEST_CRON_SECRET
+# 详见 README / ROADMAP。
+
+name: Email digest
+
+on:
+  schedule:
+    # 每天 01:00、13:00 UTC（约北京时间 09:00 / 21:00）
+    - cron: "0 1,13 * * *"
+  workflow_dispatch:
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST send-news-email-digest
+        env:
+          URL: ${{ secrets.EMAIL_DIGEST_URL }}
+          SECRET: ${{ secrets.EMAIL_DIGEST_CRON_SECRET }}
+        run: |
+          if [ -z "${URL}" ] || [ -z "${SECRET}" ]; then
+            echo "Skipping: set repository secrets EMAIL_DIGEST_URL and EMAIL_DIGEST_CRON_SECRET to enable."
+            exit 0
+          fi
+          curl -sS -f -X POST "${URL}" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${SECRET}" \
+            -d '{}' \
+            -w "\nHTTP %{http_code}\n"

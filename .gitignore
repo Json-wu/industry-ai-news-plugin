@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Plasmo
+.plasmo/
+build/
+.dev/
+
+# Editor
+.DS_Store
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local

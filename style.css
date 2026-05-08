@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Side panel / extension pages: fill available height */
+@layer base {
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+
+  #plasmo,
+  #__plasmo {
+    min-height: 100%;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+}
