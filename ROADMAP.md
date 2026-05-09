@@ -9,8 +9,8 @@
 - **壳与体验**：Side Panel、浅/深主题、顶栏（菜单打开设置）、首次行业引导、设置（行业、提醒模式、Pro 邮箱、**仅本地演示数据**）、`chrome.storage.sync` 持久化。
 - **内容展示**：左图右文列表、分页与触底加载、点击新开标签页；在线拉取 `lib/rss-feeds.ts` 白名单 RSS，失败或开启「仅演示」时使用 `MOCK_BRIEFS`；RSS 条目支持解析 **缩略图**（`media:thumbnail` / 图片类 `enclosure`）。
 - **提醒**：`alarms` + `notifications`（占位文案，非真实摘要管线）。
-- **未完全落地**：摘要服务端缓存/限流、真实邮件投递、CI 定时拉取/发版、商店上架材料等。
-- **已具备**：Supabase 偏好 LWW 同步、Edge + DeepSeek 摘要（需部署函数与 Secret `DEEPSEEK_API_KEY`）、会话与 `options.html` 回调、**GitHub Actions CI**（`npm test` + `npm run build`）。
+- **未完全落地**：商店上架材料、E2E/监控、个别 RSS 域名代理等。
+- **已具备**：摘要 **URL 缓存**（`article_summary_cache`）+ **每日 LLM 条数上限**；邮件简报 **纯文本**、**退订链接**（`email-unsubscribe`）、设置内 **订阅开关**；其余见下文各阶段。
 
 ---
 
@@ -67,9 +67,9 @@
 - 扩展：`lib/ai-summarize.ts` 在侧栏拉取 **在线 RSS 列表** 且用户已登录时，对前 `AI_SUMMARY_MAX_ITEMS` 条调用 `supabase.functions.invoke('summarize-article')`；失败或未部署函数时保留 RSS 原文/摘要。
 - 默认模型 `deepseek-chat`；可选 Secret：`DEEPSEEK_MODEL`、`DEEPSEEK_API_BASE`（兼容其它 OpenAI 形状网关时自行替换基地址）。
 
-**待增强**：URL + 模型维度的服务端缓存、限流与用量面板。
+**待增强**：用量面板与告警。
 
-**部署**：`supabase secrets set DEEPSEEK_API_KEY=...`（在 [DeepSeek 开放平台](https://platform.deepseek.com/) 创建 API Key），再 `supabase functions deploy summarize-article`（需已 `supabase link` 或使用 `--project-ref`）。
+**部署**：`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`（写缓存与计数）；可选 `SUMMARY_CACHE_TTL_HOURS`（默认 168）、`SUMMARY_DAILY_LLM_ITEMS_PER_USER`（默认 120）。`supabase functions deploy summarize-article`。
 
 **验收**：已部署且配置密钥时列表摘要为模型改写；否则静默保持 RSS 文案。
 
@@ -83,10 +83,11 @@
 
 - `background.ts`：按提醒模式拉取列表、与 `latestSeenNewsIds` 对比后弹系统通知；**文案中带首条新简报的标题**（`lib/news-delta.ts` 的 `firstNewBrief`）；点击通知打开侧栏。
 - **邮件简报**：Edge `send-news-email-digest`（Resend 发 HTML、按 `user_extension_preferences` 中 Pro + 非免打扰 + 非「仅演示」+ 有效 `reminder_email` 拉取 RSS）；`last_email_digest_at` 限流；GitHub Actions `.github/workflows/email-digest.yml` 定时 `POST` 触发（需配置仓库 Secrets）。
+- **通知定位**：弹出摘要通知时写入 `pendingDigestFocusNewsId`；侧栏 `NewsFeed` 加载后展开分页、滚动并短暂高亮该条（邮件域名验证可延期）。
 
 **待做**
 
-- 点击通知后滚动/定位到对应条目；邮件内容与侧栏 AI 摘要统一管线、更高刷新频率与退订链接等。
+- 更高邮件频率策略与合规文案细化。
 
 ---
 

@@ -118,6 +118,12 @@ async function maybeNotifyForFreshBriefs() {
       : titleHint
         ? `共 ${nextNewCount} 条新简报，含 ${titleHint}等。点击图标可在侧栏查看。`
         : `检测到 ${nextNewCount} 条新行业简报，点击图标可在侧栏查看。`
+  if (head?.id) {
+    await chrome.storage.local.set({
+      [STORAGE.pendingDigestFocusNewsId]: head.id
+    })
+  }
+
   const notificationId = `${DIGEST_NOTIFICATION_ID_PREFIX}${Date.now()}`
   await chrome.notifications.create(notificationId, {
     type: "basic",

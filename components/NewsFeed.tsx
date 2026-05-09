@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react"
 
 import { imageUrlForBrief, type NewsBrief } from "../lib/briefs"
 import { INDUSTRIES } from "../lib/industries"
@@ -14,6 +21,9 @@ type Props = {
   loadError?: string
   /** 设置中「仅使用本地演示数据」 */
   userChoseMockOnly?: boolean
+  /** 点击系统通知后传入：滚动到该条并短暂高亮，完成后调用 onDigestFocusConsumed */
+  digestFocusNewsId?: string | null
+  onDigestFocusConsumed?: () => void
 }
 
 function labelForIndustry(id: string): string {
@@ -48,13 +58,22 @@ export function NewsFeed({
   loadState = "ok",
   dataSource = "live",
   loadError,
-  userChoseMockOnly = false
+  userChoseMockOnly = false,
+  digestFocusNewsId = null,
+  onDigestFocusConsumed
 }: Props) {
   const itemsKey = useMemo(() => items.map((i) => i.id).join(","), [items])
   const [visibleCount, setVisibleCount] = useState(() =>
     Math.min(PAGE_SIZE, items.length)
   )
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rowRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+  const [highlightNewsId, setHighlightNewsId] = useState<string | null>(null)
+  const digestScrollStartedRef = useRef(false)
+
+  useEffect(() => {
+    digestScrollStartedRef.current = false
+  }, [digestFocusNewsId])
 
   useEffect(() => {
     setVisibleCount(Math.min(PAGE_SIZE, items.length))
@@ -69,6 +88,90 @@ export function NewsFeed({
   const loadMore = useCallback(() => {
     setVisibleCount((c) => Math.min(c + PAGE_SIZE, items.length))
   }, [items.length])
+
+  useLayoutEffect(() => {
+    if (
+      !digestFocusNewsId ||
+      loadState !== "ok" ||
+      items.length === 0 ||
+      !onDigestFocusConsumed
+    ) {
+      return
+    }
+    const idx = items.findIndex((i) => i.id === digestFocusNewsId)
+    if (idx < 0) {
+      onDigestFocusConsumed()
+      return
+    }
+    setVisibleCount((c) => Math.max(c, idx + 1))
+  }, [
+    digestFocusNewsId,
+    itemsKey,
+    items,
+    loadState,
+    onDigestFocusConsumed
+  ])
+
+  useLayoutEffect(() => {
+    if (
+      !digestFocusNewsId ||
+      loadState !== "ok" ||
+      !onDigestFocusConsumed
+    ) {
+      return
+    }
+    const idx = items.findIndex((i) => i.id === digestFocusNewsId)
+    if (idx < 0) {
+      return
+    }
+    if (idx >= visibleCount) {
+      return
+    }
+
+    let attempts = 0
+    const maxAttempts = 24
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const finish = () => {
+      digestScrollStartedRef.current = false
+      setHighlightNewsId(null)
+      onDigestFocusConsumed()
+    }
+
+    const tryScroll = () => {
+      if (digestScrollStartedRef.current) {
+        return
+      }
+      const el = rowRefs.current.get(digestFocusNewsId)
+      if (el) {
+        digestScrollStartedRef.current = true
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+        setHighlightNewsId(digestFocusNewsId)
+        timer = setTimeout(finish, 2400)
+        return
+      }
+      attempts += 1
+      if (attempts >= maxAttempts) {
+        finish()
+        return
+      }
+      requestAnimationFrame(tryScroll)
+    }
+
+    requestAnimationFrame(tryScroll)
+    return () => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+  }, [
+    digestFocusNewsId,
+    visibleCount,
+    itemsKey,
+    items,
+    loadState,
+    onDigestFocusConsumed
+  ])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -152,11 +255,25 @@ export function NewsFeed({
         <ul className="m-0 list-none space-y-3.5 p-0">
           {shown.map((b) => {
             const thumb = imageUrlForBrief(b)
+            const isHighlight = highlightNewsId === b.id
             return (
-              <li key={b.id}>
+              <li
+                key={b.id}
+                ref={(node) => {
+                  const m = rowRefs.current
+                  if (node) {
+                    m.set(b.id, node)
+                  } else {
+                    m.delete(b.id)
+                  }
+                }}>
                 <button
                   type="button"
-                  className="group flex w-full gap-3 rounded-xl border border-slate-100 bg-white/90 p-2.5 text-left shadow-sm transition hover:border-slate-200 hover:shadow dark:border-slate-700/80 dark:bg-slate-900/90 dark:hover:border-slate-600"
+                  className={`group flex w-full gap-3 rounded-xl border bg-white/90 p-2.5 text-left shadow-sm transition hover:border-slate-200 hover:shadow dark:bg-slate-900/90 dark:hover:border-slate-600 ${
+                    isHighlight
+                      ? "border-sky-400 ring-2 ring-sky-400/90 ring-offset-2 ring-offset-slate-50 dark:border-sky-500 dark:ring-sky-500/80 dark:ring-offset-slate-950"
+                      : "border-slate-100 dark:border-slate-700/80"
+                  }`}
                   onClick={() => {
                     onOpenUrl(b.url)
                   }}>

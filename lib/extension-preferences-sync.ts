@@ -22,6 +22,8 @@ export type ExtensionPrefsState = {
   reminderEmail: string
   newsMockOnly: boolean
   uiTheme: UiTheme
+  /** 为 true 表示用户退订/关闭定时邮件简报 */
+  emailDigestOptOut: boolean
 }
 
 export type ExtensionPrefsSyncSource =
@@ -43,6 +45,7 @@ const SYNC_KEYS = [
   STORAGE.reminderEmail,
   STORAGE.uiTheme,
   STORAGE.newsMockOnly,
+  STORAGE.emailDigestOptOut,
   STORAGE.prefsLastLocalWriteAt
 ] as const
 
@@ -97,7 +100,8 @@ export function syncRecordToState(
         ? (r[STORAGE.reminderEmail] as string)
         : "",
     newsMockOnly: r[STORAGE.newsMockOnly] === true,
-    uiTheme: parseUiTheme(r[STORAGE.uiTheme])
+    uiTheme: parseUiTheme(r[STORAGE.uiTheme]),
+    emailDigestOptOut: r[STORAGE.emailDigestOptOut] === true
   }
 }
 
@@ -115,6 +119,7 @@ function stateToUpsertPayload(
     news_mock_only: s.newsMockOnly,
     ui_theme: s.uiTheme,
     onboarding_complete: s.onboardingComplete,
+    email_digest_opt_out: s.emailDigestOptOut,
     updated_at: now
   }
 }
@@ -130,6 +135,7 @@ function rowToChromePatch(
     [STORAGE.reminderEmail]: row.reminder_email,
     [STORAGE.newsMockOnly]: row.news_mock_only,
     [STORAGE.uiTheme]: rowToUiTheme(row),
+    [STORAGE.emailDigestOptOut]: Boolean(row.email_digest_opt_out),
     [STORAGE.prefsLastLocalWriteAt]: row.updated_at
   }
 }
@@ -139,6 +145,7 @@ function isPrefsRow(x: unknown): x is UserExtensionPreferencesRow {
     return false
   }
   const o = x as Record<string, unknown>
+  const optOut = o.email_digest_opt_out
   return (
     typeof o.user_id === "string" &&
     Array.isArray(o.industry_ids) &&
@@ -148,7 +155,8 @@ function isPrefsRow(x: unknown): x is UserExtensionPreferencesRow {
     typeof o.news_mock_only === "boolean" &&
     typeof o.ui_theme === "string" &&
     typeof o.onboarding_complete === "boolean" &&
-    typeof o.updated_at === "string"
+    typeof o.updated_at === "string" &&
+    (typeof optOut === "boolean" || optOut === undefined)
   )
 }
 

@@ -9,13 +9,17 @@ export const STORAGE = {
   uiTheme: "uiTheme",
   /** 为 true 时不请求 RSS，仅用本地演示数据 */
   newsMockOnly: "newsMockOnly",
+  /** 为 true 时不接收定时邮件简报（与 DB email_digest_opt_out 一致） */
+  emailDigestOptOut: "emailDigestOptOut",
   /**
    * ISO 时间戳：本地最后一次写入偏好 bundle 的时间，用于与云端 `updated_at` 做 LWW。
    * 缺省时在比较中视为 1970-01-01，以便新设备拉取已有云端数据。
    */
   prefsLastLocalWriteAt: "prefsLastLocalWriteAt",
   /** 后台提醒使用：最近一批已见资讯 id（避免重复提醒） */
-  latestSeenNewsIds: "latestSeenNewsIds"
+  latestSeenNewsIds: "latestSeenNewsIds",
+  /** 用户点击摘要通知后，侧栏滚动定位到该条资讯 id（一次性） */
+  pendingDigestFocusNewsId: "pendingDigestFocusNewsId"
 } as const
 
 export type StorageKey = (typeof STORAGE)[keyof typeof STORAGE]

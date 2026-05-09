@@ -15,6 +15,8 @@ export type SettingsSnapshot = {
   email: string
   /** 仅使用本地演示数据，不拉取 RSS */
   newsMockOnly: boolean
+  /** 为 true 时不接收定时邮件简报 */
+  emailDigestOptOut: boolean
 }
 
 type Props = {
@@ -205,10 +207,32 @@ export function SettingsModal({
               }}
               className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:bg-slate-900/80"
             />
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              开启 Pro 并填写邮箱后，可在服务端配置 Resend + 定时任务（见仓库{" "}
-              <span className="font-mono text-[10px]">.github/workflows/email-digest.yml</span>
-              ）按行业 RSS 发送简报；发信频率受云端限流（与提醒模式相关）。
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded"
+                disabled={!draft.isPro}
+                checked={draft.isPro && !draft.emailDigestOptOut}
+                onChange={(e) => {
+                  const subscribe = e.target.checked
+                  setDraft((d) => ({
+                    ...d,
+                    emailDigestOptOut: !subscribe
+                  }))
+                }}
+              />
+              <span>
+                <span className="font-medium">订阅邮件简报</span>
+                <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
+                  需配置 Resend 与定时任务；正文摘要来自与侧栏相同的 URL
+                  缓存。关闭后等同于退订（也可通过邮件内退订链接）。
+                </span>
+              </span>
+            </label>
+            <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+              发信频率见仓库{" "}
+              <span className="font-mono text-[10px]">email-digest.yml</span>
+              ；服务端限流见 Edge 配置。
             </p>
           </section>
         </div>

@@ -66,10 +66,21 @@ npm run db:deploy
 SUPABASE_DB_URL='postgresql://...' npm run db:deploy
 ```
 
-### 邮件简报（Pro 接收邮箱）
+### 数据库迁移（含摘要缓存、邮件退订字段）
 
-1. 在 [Resend](https://resend.com) 创建 API Key；发件域名验证后，将 `EMAIL_FROM` 设为你的域名发件人（测试可用 Resend 文档中的 `onboarding@resend.dev`，仅能发到有限测试地址）。
-2. Supabase **Edge Functions → Secrets** 增加：`RESEND_API_KEY`、`EMAIL_FROM`（可选）、`EMAIL_DIGEST_CRON_SECRET`（随机长串）、`SUPABASE_SERVICE_ROLE_KEY`（控制台 **API → service_role**，勿提交到 Git）。
-3. 部署：`npx supabase functions deploy send-news-email-digest`
-4. GitHub 仓库 **Settings → Secrets and variables → Actions** 增加：`EMAIL_DIGEST_URL`（`https://<ref>.supabase.co/functions/v1/send-news-email-digest`）、`EMAIL_DIGEST_CRON_SECRET`（与上一步同名 Secret 值一致）。  
-   工作流见 `.github/workflows/email-digest.yml`（默认定时每天 2 次 UTC）；也可在 Actions 里 **Run workflow** 手动试发。
+```bash
+npm run db:deploy
+```
+
+### AI 摘要 Edge（`summarize-article`）
+
+在 Edge Secrets 中配置：`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`（必填，用于写 `article_summary_cache` / `user_llm_usage_daily`）；可选 `SUMMARY_CACHE_TTL_HOURS`、`SUMMARY_DAILY_LLM_ITEMS_PER_USER`。
+
+**部署**：本机执行 `npx supabase functions deploy summarize-article`。若在 macOS 上出现 **`error running container: exit 139`**（Docker 内打包段错误），可改用 **GitHub Actions → Deploy Edge Functions**（手动运行），在仓库 Secrets 中配置 `SUPABASE_ACCESS_TOKEN` 与 `SUPABASE_PROJECT_REF`（见 `.github/workflows/deploy-edge-functions.yml`）。
+
+### 邮件简报（Pro + 订阅开关未关闭）
+
+1. 在 [Resend](https://resend.com) 创建 API Key；正式环境验证发件域名后设置 `EMAIL_FROM`（测试可用 `onboarding@resend.dev`）。
+2. Edge Secrets：`RESEND_API_KEY`、`EMAIL_FROM`、`EMAIL_DIGEST_CRON_SECRET`、`SUPABASE_SERVICE_ROLE_KEY`；**可选** `EMAIL_UNSUBSCRIBE_SECRET`（建议 ≥32 字符随机串）— 设置后邮件内含退订链接，并需部署 `email-unsubscribe`。
+3. 部署：`npx supabase functions deploy send-news-email-digest`；若有退订：`npx supabase functions deploy email-unsubscribe`。
+4. GitHub Actions：`EMAIL_DIGEST_URL`、`EMAIL_DIGEST_CRON_SECRET`（与 Edge 一致）。工作流见 `.github/workflows/email-digest.yml`。

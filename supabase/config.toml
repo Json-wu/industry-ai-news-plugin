@@ -12,3 +12,6 @@ major_version = 15
 # 定时邮件简报：仅校验自定义 Header，不用用户 JWT。
 [functions.send-news-email-digest]
 verify_jwt = false
+
+[functions.email-unsubscribe]
+verify_jwt = false

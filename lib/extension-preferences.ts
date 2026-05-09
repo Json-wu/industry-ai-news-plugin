@@ -18,6 +18,7 @@ export type UserExtensionPreferencesRow = {
   ui_theme: string
   onboarding_complete: boolean
   updated_at: string
+  email_digest_opt_out?: boolean
 }
 
 /** Lexicographic ISO compare; Postgres timestamptz round-trips as ISO. */

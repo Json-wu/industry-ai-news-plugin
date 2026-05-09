@@ -50,6 +50,10 @@ function SidePanel() {
   const [newsSource, setNewsSource] = useState<"live" | "mock">("live")
   const [newsError, setNewsError] = useState<string | undefined>(undefined)
   const [newsMockOnly, setNewsMockOnly] = useState(false)
+  const [digestFocusNewsId, setDigestFocusNewsId] = useState<string | null>(
+    null
+  )
+  const [emailDigestOptOut, setEmailDigestOptOut] = useState(false)
   const newsMockOnlyRef = useRef(newsMockOnly)
   newsMockOnlyRef.current = newsMockOnly
 
@@ -67,7 +71,8 @@ function SidePanel() {
       reminderMode: patch.reminderMode ?? reminderMode,
       reminderEmail: patch.reminderEmail ?? email,
       newsMockOnly: patch.newsMockOnly ?? newsMockOnly,
-      uiTheme: patch.uiTheme ?? uiTheme
+      uiTheme: patch.uiTheme ?? uiTheme,
+      emailDigestOptOut: patch.emailDigestOptOut ?? emailDigestOptOut
     }),
     [
       onboardingComplete,
@@ -76,7 +81,8 @@ function SidePanel() {
       reminderMode,
       email,
       newsMockOnly,
-      uiTheme
+      uiTheme,
+      emailDigestOptOut
     ]
   )
 
@@ -89,6 +95,7 @@ function SidePanel() {
     setReminderMode(s.reminderMode)
     setEmail(s.reminderEmail)
     setNewsMockOnly(s.newsMockOnly)
+    setEmailDigestOptOut(s.emailDigestOptOut)
     setUiTheme(s.uiTheme)
     if (s.newsMockOnly !== prevMock) {
       clearNewsCache()
@@ -101,6 +108,41 @@ function SidePanel() {
   }, [uiTheme])
 
   useEffect(() => {
+    void chrome.storage.local.get(STORAGE.pendingDigestFocusNewsId, (r) => {
+      const v = r[STORAGE.pendingDigestFocusNewsId]
+      if (typeof v === "string" && v.length > 0) {
+        setDigestFocusNewsId(v)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    const onStorageLocal = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string
+    ) => {
+      if (area !== "local") {
+        return
+      }
+      const ch = changes[STORAGE.pendingDigestFocusNewsId]
+      if (
+        ch?.newValue !== undefined &&
+        typeof ch.newValue === "string" &&
+        ch.newValue.length > 0
+      ) {
+        setDigestFocusNewsId(ch.newValue)
+      }
+    }
+    chrome.storage.onChanged.addListener(onStorageLocal)
+    return () => chrome.storage.onChanged.removeListener(onStorageLocal)
+  }, [])
+
+  const clearDigestFocus = useCallback(() => {
+    setDigestFocusNewsId(null)
+    void chrome.storage.local.remove(STORAGE.pendingDigestFocusNewsId)
+  }, [])
+
+  useEffect(() => {
     void chrome.storage.sync.get(
       [
         STORAGE.onboardingComplete,
@@ -110,6 +152,7 @@ function SidePanel() {
         STORAGE.reminderEmail,
         STORAGE.uiTheme,
         STORAGE.newsMockOnly,
+        STORAGE.emailDigestOptOut,
         STORAGE.prefsLastLocalWriteAt
       ],
       (r: Record<string, unknown>) => {
@@ -139,6 +182,7 @@ function SidePanel() {
         }
         setUiTheme(parseUiTheme(r[STORAGE.uiTheme]))
         setNewsMockOnly(r[STORAGE.newsMockOnly] === true)
+        setEmailDigestOptOut(r[STORAGE.emailDigestOptOut] === true)
         setReady(true)
       }
     )
@@ -253,6 +297,7 @@ function SidePanel() {
       reminderMode: ReminderMode
       email: string
       newsMockOnly: boolean
+      emailDigestOptOut: boolean
     }) => {
       const iso = new Date().toISOString()
       void chrome.storage.sync.set({
@@ -261,6 +306,7 @@ function SidePanel() {
         [STORAGE.reminderMode]: snap.reminderMode,
         [STORAGE.reminderEmail]: snap.email,
         [STORAGE.newsMockOnly]: snap.newsMockOnly,
+        [STORAGE.emailDigestOptOut]: snap.emailDigestOptOut,
         [STORAGE.prefsLastLocalWriteAt]: iso
       })
     },
@@ -313,9 +359,10 @@ function SidePanel() {
       isPro,
       reminderMode,
       email,
-      newsMockOnly
+      newsMockOnly,
+      emailDigestOptOut
     }),
-    [selected, isPro, reminderMode, email, newsMockOnly]
+    [selected, isPro, reminderMode, email, newsMockOnly, emailDigestOptOut]
   )
 
   const onSettingsSave = useCallback(
@@ -328,6 +375,7 @@ function SidePanel() {
       setReminderMode(next.reminderMode)
       setEmail(next.email)
       setNewsMockOnly(next.newsMockOnly)
+      setEmailDigestOptOut(next.emailDigestOptOut)
       persistAll(next)
       const supabase = getSupabase()
       if (supabase) {
@@ -338,7 +386,8 @@ function SidePanel() {
             isPro: next.isPro,
             reminderMode: next.reminderMode,
             reminderEmail: next.email,
-            newsMockOnly: next.newsMockOnly
+            newsMockOnly: next.newsMockOnly,
+            emailDigestOptOut: next.emailDigestOptOut
           })
         )
       }
@@ -372,6 +421,8 @@ function SidePanel() {
         dataSource={newsSource}
         loadError={newsError}
         userChoseMockOnly={newsMockOnly}
+        digestFocusNewsId={digestFocusNewsId}
+        onDigestFocusConsumed={clearDigestFocus}
         onOpenUrl={openInTab}
       />
 

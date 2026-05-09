@@ -1,11 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1"
 
+import { hmacSha256Hex } from "../_shared/hmac-user.ts"
 import {
   MAX_DIGEST_ITEMS,
   MAX_ITEMS_PER_FEED,
   RSS_FEEDS
 } from "../_shared/rss-config.ts"
 import { type DigestItem, parseFeedItems } from "../_shared/rss-parse.ts"
+import { canonicalUrlForSummaryCache } from "../_shared/url-cache-key.ts"
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -95,19 +97,47 @@ async function collectDigestForIndustries(
   return dedup.slice(0, MAX_DIGEST_ITEMS)
 }
 
-function buildHtmlDigest(items: DigestItem[]): string {
+function buildHtmlDigest(
+  items: DigestItem[],
+  summaryByCanon: Map<string, string>,
+  unsubHtml?: string
+): string {
   const rows = items
-    .map(
-      (it) =>
-        `<li style="margin:0.5em 0;"><a href="${escHtml(it.url)}">${escHtml(it.title)}</a><br/><span style="color:#64748b;font-size:12px;">${escHtml(it.source)} · ${escHtml(it.publishedAt || "—")}</span></li>`
-    )
+    .map((it) => {
+      const canon = canonicalUrlForSummaryCache(it.url)
+      const sum = summaryByCanon.get(canon)
+      const sumBlock = sum
+        ? `<p style="margin:0.35em 0 0;color:#334155;font-size:13px;">${escHtml(sum)}</p>`
+        : ""
+      return `<li style="margin:0.75em 0;"><a style="color:#0284c7;font-weight:600;" href="${escHtml(it.url)}">${escHtml(it.title)}</a>${sumBlock}<span style="display:block;color:#64748b;font-size:12px;margin-top:0.35em;">${escHtml(it.source)} · ${escHtml(it.publishedAt || "—")}</span></li>`
+    })
     .join("\n")
+  const foot = unsubHtml
+    ? `<p style="color:#94a3b8;font-size:12px;margin-top:2em;">${unsubHtml}</p>`
+    : `<p style="color:#94a3b8;font-size:12px;margin-top:2em;">若不想再收，可在扩展「设置」中关闭「订阅邮件简报」。</p>`
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#0f172a;">
 <h1 style="font-size:18px;">Industry AI News · 行业简报</h1>
-<p style="color:#475569;font-size:14px;">以下为根据你在扩展中的<strong>关注行业</strong>拉取的公开 RSS 条目摘要列表。点击标题可阅读原文。</p>
+<p style="color:#475569;font-size:14px;">摘要来自你在扩展内浏览时已生成的模型摘要（与侧栏同源缓存）；无缓存时仅列标题与链接。</p>
 <ol style="padding-left:1.2em;">${rows}</ol>
-<p style="color:#94a3b8;font-size:12px;margin-top:2em;">本邮件由定时任务触发；若不想再收，请在扩展「设置」中关闭 Pro 接收邮箱或改为免打扰。</p>
+${foot}
 </body></html>`
+}
+
+function buildPlainDigest(
+  items: DigestItem[],
+  summaryByCanon: Map<string, string>,
+  unsubText?: string
+): string {
+  const lines = items.map((it) => {
+    const canon = canonicalUrlForSummaryCache(it.url)
+    const sum = summaryByCanon.get(canon)
+    const bits = [it.title, it.url, sum ? `摘要：${sum}` : "", `${it.source} · ${it.publishedAt || "—"}`]
+    return bits.filter(Boolean).join("\n")
+  })
+  const tail = unsubText
+    ? `\n\n${unsubText}`
+    : "\n\n若不想再收，请在扩展设置中关闭订阅邮件简报。"
+  return `Industry AI News · 行业简报\n\n${lines.join("\n\n---\n\n")}${tail}`
 }
 
 async function sendResend(params: {
@@ -116,6 +146,7 @@ async function sendResend(params: {
   to: string
   subject: string
   html: string
+  text: string
 }): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -127,7 +158,8 @@ async function sendResend(params: {
       from: params.from,
       to: [params.to],
       subject: params.subject,
-      html: params.html
+      html: params.html,
+      text: params.text
     })
   })
   const body = await r.text()
@@ -145,6 +177,7 @@ type PrefsRow = {
   reminder_email: string
   news_mock_only: boolean
   last_email_digest_at: string | null
+  email_digest_opt_out: boolean
 }
 
 Deno.serve(async (req) => {
@@ -192,11 +225,12 @@ Deno.serve(async (req) => {
   const { data: rows, error: qErr } = await admin
     .from("user_extension_preferences")
     .select(
-      "user_id,industry_ids,is_pro,reminder_mode,reminder_email,news_mock_only,last_email_digest_at"
+      "user_id,industry_ids,is_pro,reminder_mode,reminder_email,news_mock_only,last_email_digest_at,email_digest_opt_out"
     )
     .eq("is_pro", true)
     .neq("reminder_mode", "dnd")
     .eq("news_mock_only", false)
+    .eq("email_digest_opt_out", false)
 
   if (qErr) {
     console.error("[email-digest] query", qErr)
@@ -243,14 +277,43 @@ Deno.serve(async (req) => {
       continue
     }
 
-    const html = buildHtmlDigest(items)
+    const canonSet = [
+      ...new Set(items.map((it) => canonicalUrlForSummaryCache(it.url)))
+    ].filter(Boolean)
+    const { data: cacheRows } = await admin
+      .from("article_summary_cache")
+      .select("url,summary")
+      .in("url", canonSet)
+
+    const summaryByCanon = new Map<string, string>()
+    for (const row of cacheRows ?? []) {
+      const r = row as { url: string; summary: string }
+      if (r.url && r.summary) {
+        summaryByCanon.set(r.url, r.summary)
+      }
+    }
+
+    const unsubSecret = Deno.env.get("EMAIL_UNSUBSCRIBE_SECRET") ?? ""
+    let unsubHtml: string | undefined
+    let unsubText: string | undefined
+    if (unsubSecret.length >= 8) {
+      const sig = await hmacSha256Hex(unsubSecret, row.user_id)
+      const base = supabaseUrl.replace(/\/$/, "")
+      const u = `${base}/functions/v1/email-unsubscribe?uid=${encodeURIComponent(row.user_id)}&sig=${encodeURIComponent(sig)}`
+      unsubHtml = `<a href="${escHtml(u)}" style="color:#64748b;">点击退订邮件简报</a>`
+      unsubText = `退订邮件简报：${u}`
+    }
+
+    const html = buildHtmlDigest(items, summaryByCanon, unsubHtml)
+    const text = buildPlainDigest(items, summaryByCanon, unsubText)
     const subject = `行业资讯简报 · ${new Date().toISOString().slice(0, 10)}（${items.length} 条）`
     const res = await sendResend({
       apiKey: resendKey,
       from: emailFrom,
       to,
       subject,
-      html
+      html,
+      text
     })
     if (!res.ok) {
       errors.push(`${row.user_id}:resend:${res.status}:${res.body.slice(0, 200)}`)
