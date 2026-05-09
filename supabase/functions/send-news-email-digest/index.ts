@@ -45,6 +45,54 @@ function validDigestEmail(s: string): boolean {
   return t.length > 3 && t.includes("@") && !t.includes(" ")
 }
 
+function buildSummaryByCanonFromCache(
+  cacheRows: Array<{ url: string; summary: string; locale: string }>,
+  canonSet: string[]
+): Map<string, string> {
+  const byUrl = new Map<string, Array<{ summary: string; locale: string }>>()
+  for (const r of cacheRows) {
+    const sum = typeof r.summary === "string" ? r.summary.trim() : ""
+    if (!r.url || !sum) {
+      continue
+    }
+    const loc = typeof r.locale === "string" ? r.locale : ""
+    const list = byUrl.get(r.url) ?? []
+    list.push({ summary: r.summary, locale: loc })
+    byUrl.set(r.url, list)
+  }
+  const raw = Deno.env.get("EMAIL_DIGEST_SUMMARY_LOCALE_PRIORITY") ?? "zh,en"
+  const priority = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
+  const out = new Map<string, string>()
+  for (const url of canonSet) {
+    const list = byUrl.get(url)
+    if (!list?.length) {
+      continue
+    }
+    let chosen: string | undefined
+    for (const loc of priority) {
+      const hit = list.find((x) => x.locale === loc && x.summary.trim())
+      if (hit) {
+        chosen = hit.summary.trim()
+        break
+      }
+    }
+    if (!chosen) {
+      const first = list.find((x) => x.summary.trim())
+      if (first) {
+        chosen = first.summary.trim()
+      }
+    }
+    if (chosen) {
+      out.set(url, chosen)
+    }
+  }
+  return out
+}
+
 async function fetchXml(url: string, ms: number): Promise<string> {
   const ctrl = new AbortController()
   const id = setTimeout(() => ctrl.abort(), ms)
@@ -97,28 +145,37 @@ async function collectDigestForIndustries(
   return dedup.slice(0, MAX_DIGEST_ITEMS)
 }
 
+function cachedSummaryForItem(
+  it: DigestItem,
+  summaryByCanon: Map<string, string>
+): string | undefined {
+  const canon = canonicalUrlForSummaryCache(it.url)
+  const s = summaryByCanon.get(canon)?.trim()
+  return s && s.length > 0 ? s : undefined
+}
+
 function buildHtmlDigest(
   items: DigestItem[],
   summaryByCanon: Map<string, string>,
   unsubHtml?: string
 ): string {
+  const intro = `本期最多包含 <strong>${MAX_DIGEST_ITEMS}</strong> 条最新资讯（按发布时间从新到旧）。若某条曾在扩展侧栏打开并已生成 AI 摘要，我们会从云端缓存读取并显示在标题下方；尚未生成摘要的条目仅展示标题与链接。`
   const rows = items
     .map((it) => {
-      const canon = canonicalUrlForSummaryCache(it.url)
-      const sum = summaryByCanon.get(canon)
+      const sum = cachedSummaryForItem(it, summaryByCanon)
       const sumBlock = sum
-        ? `<p style="margin:0.35em 0 0;color:#334155;font-size:13px;">${escHtml(sum)}</p>`
+        ? `<p style="margin:0.4em 0 0;line-height:1.45;color:#334155;font-size:13px;">${escHtml(sum)}</p>`
         : ""
-      return `<li style="margin:0.75em 0;"><a style="color:#0284c7;font-weight:600;" href="${escHtml(it.url)}">${escHtml(it.title)}</a>${sumBlock}<span style="display:block;color:#64748b;font-size:12px;margin-top:0.35em;">${escHtml(it.source)} · ${escHtml(it.publishedAt || "—")}</span></li>`
+      return `<li style="margin:0.85em 0;"><a style="color:#0284c7;font-weight:600;text-decoration:none;" href="${escHtml(it.url)}">${escHtml(it.title)}</a>${sumBlock}<span style="display:block;color:#64748b;font-size:12px;margin-top:0.45em;">${escHtml(it.source)} · ${escHtml(it.publishedAt || "—")}</span></li>`
     })
     .join("\n")
   const foot = unsubHtml
     ? `<p style="color:#94a3b8;font-size:12px;margin-top:2em;">${unsubHtml}</p>`
     : `<p style="color:#94a3b8;font-size:12px;margin-top:2em;">若不想再收，可在扩展「设置」中关闭「订阅邮件简报」。</p>`
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#0f172a;">
-<h1 style="font-size:18px;">Industry AI News · 行业简报</h1>
-<p style="color:#475569;font-size:14px;">摘要来自你在扩展内浏览时已生成的模型摘要（与侧栏同源缓存）；无缓存时仅列标题与链接。</p>
-<ol style="padding-left:1.2em;">${rows}</ol>
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/></head><body style="font-family:system-ui,sans-serif;line-height:1.55;color:#0f172a;">
+<h1 style="font-size:18px;margin-bottom:0.5em;">Industry AI News · 行业简报</h1>
+<p style="color:#475569;font-size:14px;margin:0 0 1em;line-height:1.6;">${intro}</p>
+<ol style="padding-left:1.15em;margin:0;">${rows}</ol>
 ${foot}
 </body></html>`
 }
@@ -128,16 +185,23 @@ function buildPlainDigest(
   summaryByCanon: Map<string, string>,
   unsubText?: string
 ): string {
+  const header =
+    "Industry AI News · 行业简报\n\n" +
+    `本期最多 ${MAX_DIGEST_ITEMS} 条最新资讯（从新到旧）。若某条曾在扩展侧栏生成过 AI 摘要，标题下会显示摘要；否则仅有标题与链接。\n`
   const lines = items.map((it) => {
-    const canon = canonicalUrlForSummaryCache(it.url)
-    const sum = summaryByCanon.get(canon)
-    const bits = [it.title, it.url, sum ? `摘要：${sum}` : "", `${it.source} · ${it.publishedAt || "—"}`]
-    return bits.filter(Boolean).join("\n")
+    const sum = cachedSummaryForItem(it, summaryByCanon)
+    const meta = `${it.source} · ${it.publishedAt || "—"}`
+    const parts = [it.title]
+    if (sum) {
+      parts.push(`摘要：${sum}`)
+    }
+    parts.push(it.url, meta)
+    return parts.join("\n")
   })
   const tail = unsubText
     ? `\n\n${unsubText}`
     : "\n\n若不想再收，请在扩展设置中关闭订阅邮件简报。"
-  return `Industry AI News · 行业简报\n\n${lines.join("\n\n---\n\n")}${tail}`
+  return `${header}\n---\n\n${lines.join("\n\n---\n\n")}${tail}`
 }
 
 async function sendResend(params: {
@@ -282,16 +346,13 @@ Deno.serve(async (req) => {
     ].filter(Boolean)
     const { data: cacheRows } = await admin
       .from("article_summary_cache")
-      .select("url,summary")
+      .select("url,summary,locale")
       .in("url", canonSet)
 
-    const summaryByCanon = new Map<string, string>()
-    for (const row of cacheRows ?? []) {
-      const r = row as { url: string; summary: string }
-      if (r.url && r.summary) {
-        summaryByCanon.set(r.url, r.summary)
-      }
-    }
+    const summaryByCanon = buildSummaryByCanonFromCache(
+      (cacheRows ?? []) as Array<{ url: string; summary: string; locale: string }>,
+      canonSet
+    )
 
     const unsubSecret = Deno.env.get("EMAIL_UNSUBSCRIBE_SECRET") ?? ""
     let unsubHtml: string | undefined

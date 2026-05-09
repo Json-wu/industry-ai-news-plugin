@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1"
 
+import {
+  type SummaryLocaleKey,
+  normalizeSummaryLocale
+} from "../_shared/summary-locale.ts"
 import { canonicalUrlForSummaryCache } from "../_shared/url-cache-key.ts"
 
 type InItem = { url?: string; title?: string; hint?: string }
@@ -118,12 +122,14 @@ Deno.serve(async (req) => {
     return json({ error: "unauthorized" }, 401)
   }
 
-  let body: { items?: InItem[] }
+  let body: { items?: InItem[]; locale?: string }
   try {
-    body = (await req.json()) as { items?: InItem[] }
+    body = (await req.json()) as { items?: InItem[]; locale?: string }
   } catch {
     return json({ error: "invalid json" }, 400)
   }
+
+  const summaryLocale: SummaryLocaleKey = normalizeSummaryLocale(body.locale)
 
   const items = body.items
   if (!Array.isArray(items) || items.length === 0 || items.length > 12) {
@@ -160,8 +166,9 @@ Deno.serve(async (req) => {
   const canonUrls = [...new Set(cleaned.map((c) => c.canon))]
   const { data: cacheRows, error: cacheErr } = await admin
     .from("article_summary_cache")
-    .select("url,summary,model,updated_at")
+    .select("url,summary,model,updated_at,locale")
     .in("url", canonUrls)
+    .eq("locale", summaryLocale)
 
   if (cacheErr) {
     console.warn("[summarize-article] cache select", cacheErr.message)
@@ -230,11 +237,26 @@ Deno.serve(async (req) => {
       null,
       0
     )
-    const prompt =
-      `你是中文新闻编辑。根据下列 JSON 数组中的每条新闻的 url、title、hint（RSS 摘要或描述），` +
-      `为每条写一句不超过 80 个汉字的中文要点，语气客观、信息密度高。\n` +
-      `只输出一个 JSON 数组，不要其它说明或 Markdown。数组元素形如 {"url":"与输入完全一致","summary":"..."}，` +
-      `顺序与输入一致，且 url 必须与输入逐字相同。\n\n输入：\n${userPayload}`
+    const { systemContent, userContent } =
+      summaryLocale === "zh"
+        ? {
+            systemContent:
+              "你只输出合法 JSON 数组，元素为对象含 url 与 summary 字符串，无其它文字。",
+            userContent:
+              `你是中文新闻编辑。根据下列 JSON 数组中的每条新闻的 url、title、hint（RSS 摘要或描述），` +
+              `为每条写一句不超过 80 个汉字的中文要点，语气客观、信息密度高。\n` +
+              `只输出一个 JSON 数组，不要其它说明或 Markdown。数组元素形如 {"url":"与输入完全一致","summary":"..."}，` +
+              `顺序与输入一致，且 url 必须与输入逐字相同。\n\n输入：\n${userPayload}`
+          }
+        : {
+            systemContent:
+              "Output only a valid JSON array of objects with url and summary string fields. No other text.",
+            userContent:
+              `You are a concise news editor. For each item in the JSON array (fields url, title, hint — hint may be RSS description), ` +
+              `write one objective one-line summary in English, at most about 120 characters, informative tone.\n` +
+              `Output only one JSON array; no Markdown fences or explanation. Each element: {"url":"exact match from input","summary":"..."}, ` +
+              `same order as input; url must match character-for-character.\n\nInput:\n${userPayload}`
+          }
 
     const apiBase = (
       Deno.env.get("DEEPSEEK_API_BASE") ?? DEFAULT_DEEPSEEK_BASE
@@ -250,12 +272,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model,
         messages: [
-          {
-            role: "system",
-            content:
-              "你只输出合法 JSON 数组，元素为对象含 url 与 summary 字符串，无其它文字。"
-          },
-          { role: "user", content: prompt }
+          { role: "system", content: systemContent },
+          { role: "user", content: userContent }
         ],
         temperature: 0.35,
         max_tokens: 2048
@@ -290,11 +308,12 @@ Deno.serve(async (req) => {
         const { error: upErr } = await admin.from("article_summary_cache").upsert(
           {
             url: canon,
+            locale: summaryLocale,
             summary: row.summary,
             model,
             updated_at: nowIso
           },
-          { onConflict: "url" }
+          { onConflict: "url,locale" }
         )
         if (upErr) {
           console.warn("[summarize-article] cache upsert", upErr.message)

@@ -11,8 +11,8 @@ export const RSS_FEEDS: Record<string, readonly string[]> = {
   environment: ["https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"]
 }
 
-/** 单用户邮件内最多展示的条目数 */
-export const MAX_DIGEST_ITEMS = 12
+/** 单用户邮件内最多展示的条目数（按时间从新到旧截取） */
+export const MAX_DIGEST_ITEMS = 10
 
 /** 每个 feed 最多抓取条目再合并排序 */
 export const MAX_ITEMS_PER_FEED = 15

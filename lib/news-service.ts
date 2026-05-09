@@ -1,7 +1,9 @@
 import { filterBriefsByIndustries, MOCK_BRIEFS, type NewsBrief } from "./briefs"
 import type { IndustryId } from "./industries"
+import { msg } from "./messages"
 import { type ParsedFeedItem, parseRssXml } from "./parse-rss"
 import { MAX_ITEMS_PER_FEED, RSS_FEEDS } from "./rss-feeds"
+import { detectUiLang, type UiLang } from "./ui-locale"
 import { idFromUrl } from "./url-id"
 
 const TTL_MS = 5 * 60 * 1000
@@ -16,9 +18,10 @@ export function clearNewsCache() {
 
 function cacheKey(
   industries: IndustryId[],
-  mockOnly: boolean
+  mockOnly: boolean,
+  lang: UiLang
 ): string {
-  return `${mockOnly ? "m" : "l"}:${[...industries].sort().join(",")}`
+  return `${mockOnly ? "m" : "l"}:${lang}:${[...industries].sort().join(",")}`
 }
 
 async function fetchFeedXml(url: string): Promise<string> {
@@ -66,6 +69,8 @@ export type LoadNewsResult = {
 export type LoadNewsOptions = {
   /** 为 true 时不请求网络，仅返回过滤后的 MOCKS */
   mockOnly?: boolean
+  /** 错误提示语言；默认跟随浏览器 */
+  lang?: UiLang
 }
 
 /**
@@ -79,6 +84,9 @@ export async function loadNewsForIndustries(
     return { items: [], source: "live" }
   }
 
+  const lang = options?.lang ?? detectUiLang()
+  const m = msg(lang)
+
   const mockOnly = options?.mockOnly === true
   if (mockOnly) {
     const mock = filterBriefsByIndustries(MOCK_BRIEFS, industries).map(
@@ -87,7 +95,7 @@ export async function loadNewsForIndustries(
     return { items: mock, source: "mock" }
   }
 
-  const key = cacheKey(industries, false)
+  const key = cacheKey(industries, false, lang)
   const now = Date.now()
   if (cache && cache.key === key && now - cache.at < TTL_MS) {
     return { items: cache.result, source: "live" }
@@ -103,7 +111,7 @@ export async function loadNewsForIndustries(
         const xml = await fetchFeedXml(feedUrl)
         const parsed = parseRssXml(xml)
         if (parsed.items.length === 0) {
-          errors.push(`${feedUrl}: 无有效条目或解析失败`)
+          errors.push(m.feedNoItems(feedUrl))
         } else {
           all.push(...toNewsBriefs(parsed, ind))
         }
@@ -139,7 +147,7 @@ export async function loadNewsForIndustries(
       source: "live",
       error:
         errors.length > 0
-          ? `部分源未成功：${errors.slice(0, 2).join("； ")}`
+          ? m.rssPartialFailure(errors.slice(0, 2).join(lang === "zh" ? "； " : "; "))
           : undefined
     }
   }
@@ -150,6 +158,6 @@ export async function loadNewsForIndustries(
   return {
     items: mock,
     source: "mock",
-    error: `无法拉取在线资讯，已显示演示数据。${errors[0] ?? ""}`
+    error: m.rssFetchFailed(errors[0] ?? "")
   }
 }

@@ -1,4 +1,6 @@
-import { INDUSTRIES, type IndustryId } from "../lib/industries"
+import { INDUSTRY_IDS, industryLabel, type IndustryId } from "../lib/industries"
+
+import { useUiLang } from "./UiLangContext"
 
 type Props = {
   selected: IndustryId[]
@@ -11,12 +13,13 @@ export function IndustryChecklist({
   onToggle,
   disabled = false
 }: Props) {
+  const lang = useUiLang()
   return (
     <ul className="m-0 list-none space-y-0.5 p-0">
-      {INDUSTRIES.map((row) => {
-        const on = selected.includes(row.id)
+      {INDUSTRY_IDS.map((id) => {
+        const on = selected.includes(id)
         return (
-          <li key={row.id}>
+          <li key={id}>
             <label
               className={`flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm ${
                 disabled
@@ -29,10 +32,12 @@ export function IndustryChecklist({
                 checked={on}
                 disabled={disabled}
                 onChange={() => {
-                  onToggle(row.id)
+                  onToggle(id)
                 }}
               />
-              <span className="text-slate-800 dark:text-slate-200">{row.label}</span>
+              <span className="text-slate-800 dark:text-slate-200">
+                {industryLabel(id, lang)}
+              </span>
             </label>
           </li>
         )

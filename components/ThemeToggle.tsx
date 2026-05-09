@@ -1,4 +1,7 @@
+import { msg } from "../lib/messages"
 import type { UiTheme } from "../lib/theme"
+
+import { useUiLang } from "./UiLangContext"
 
 type Props = {
   value: UiTheme
@@ -6,12 +9,14 @@ type Props = {
 }
 
 export function ThemeToggle({ value, onChange }: Props) {
+  const lang = useUiLang()
+  const m = msg(lang)
   const isDark = value === "dark"
   return (
     <div
       className="flex items-center gap-0.5 rounded-full border border-slate-200/90 bg-slate-100/80 p-0.5 dark:border-slate-600 dark:bg-slate-800/80"
       role="group"
-      aria-label="主题">
+      aria-label={m.themeGroup}>
       <button
         type="button"
         onClick={() => onChange("light")}
@@ -20,9 +25,9 @@ export function ThemeToggle({ value, onChange }: Props) {
             ? "bg-white text-amber-500 shadow-sm dark:bg-slate-700"
             : "text-slate-500 dark:text-slate-400"
         }`}
-        title="浅色"
+        title={m.themeLight}
         aria-pressed={!isDark}
-        aria-label="浅色模式">
+        aria-label={m.themeLight}>
         <SunIcon className="h-4 w-4" />
       </button>
       <button
@@ -33,9 +38,9 @@ export function ThemeToggle({ value, onChange }: Props) {
             ? "bg-slate-700 text-sky-300 shadow-sm dark:bg-slate-600"
             : "text-slate-500 dark:text-slate-400"
         }`}
-        title="深色"
+        title={m.themeDark}
         aria-pressed={isDark}
-        aria-label="深色模式">
+        aria-label={m.themeDark}>
         <MoonIcon className="h-4 w-4" />
       </button>
     </div>

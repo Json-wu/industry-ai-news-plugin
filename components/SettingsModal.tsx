@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 
 import { type IndustryId } from "../lib/industries"
-import { type ReminderMode, REMINDER_OPTIONS } from "../lib/reminders"
+import { msg } from "../lib/messages"
+import { type ReminderMode, getReminderOptions } from "../lib/reminders"
 import { applyIndustryToggle } from "../lib/selection"
 import { FREE_INDUSTRY_LIMIT } from "../lib/tiers"
 
 import { AccountPanel } from "./AccountPanel"
 import { IndustryChecklist } from "./IndustryChecklist"
+import { useUiLang } from "./UiLangContext"
 
 export type SettingsSnapshot = {
   industries: IndustryId[]
@@ -35,6 +37,8 @@ export function SettingsModal({
   onSave,
   onAfterSignOut
 }: Props) {
+  const lang = useUiLang()
+  const m = msg(lang)
   const [draft, setDraft] = useState<SettingsSnapshot>(initial)
 
   useEffect(() => {
@@ -83,14 +87,14 @@ export function SettingsModal({
           <h2
             id="settings-title"
             className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            设置
+            {m.settingsTitle}
           </h2>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
           <section>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              关注行业
+              {m.watchIndustries}
             </h3>
             <IndustryChecklist
               selected={draft.industries}
@@ -98,8 +102,8 @@ export function SettingsModal({
             />
             <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
               {!draft.isPro
-                ? `免费版最多 ${FREE_INDUSTRY_LIMIT} 个；开启 Pro 不限。`
-                : "Pro：行业数量不限。"}
+                ? m.freeIndustryCap(FREE_INDUSTRY_LIMIT)
+                : m.proUnlimitedIndustries}
             </p>
             <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
@@ -120,13 +124,13 @@ export function SettingsModal({
                   })
                 }}
               />
-              Pro（演示开关：邮箱与不限行业）
+              {m.proDemoCheckbox}
             </label>
           </section>
 
           <section>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              资讯数据
+              {m.newsDataSection}
             </h3>
             <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
@@ -141,13 +145,13 @@ export function SettingsModal({
                 }}
               />
               <span>
-                <span className="font-medium">仅使用本地演示数据</span>
+                <span className="font-medium">{m.mockOnlyBold}</span>
                 <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                  开启后不请求网络 RSS，便于离线或调试。关闭后按设置中的行业拉取
+                  {m.mockOnlyHelpBeforeMono}
                   <span className="whitespace-nowrap font-mono text-[10px] text-slate-600 dark:text-slate-300">
                     lib/rss-feeds
-                  </span>{" "}
-                  里配置的源。
+                  </span>
+                  {m.mockOnlyHelpAfterMono}
                 </span>
               </span>
             </label>
@@ -160,10 +164,10 @@ export function SettingsModal({
 
           <section>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              提醒模式
+              {m.reminderModeSection}
             </h3>
             <div className="space-y-2">
-              {REMINDER_OPTIONS.map((opt) => (
+              {getReminderOptions(lang).map((opt) => (
                 <label
                   key={opt.id}
                   className="flex cursor-pointer gap-2 rounded-lg border border-slate-200 px-2.5 py-2 text-sm has-[:checked]:border-sky-400 has-[:checked]:bg-sky-50/60 dark:border-slate-600 dark:has-[:checked]:border-sky-500 dark:has-[:checked]:bg-sky-950/50">
@@ -191,7 +195,7 @@ export function SettingsModal({
 
           <section>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              接收邮箱
+              {m.receiveEmailSection}
               <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">
                 Pro
               </span>
@@ -199,7 +203,9 @@ export function SettingsModal({
             <input
               type="email"
               autoComplete="email"
-              placeholder={draft.isPro ? "name@example.com" : "开启 Pro 后可填写"}
+              placeholder={
+                draft.isPro ? m.emailPlaceholderEnabled : m.emailPlaceholderDisabled
+              }
               disabled={!draft.isPro}
               value={draft.email}
               onChange={(e) => {
@@ -222,17 +228,16 @@ export function SettingsModal({
                 }}
               />
               <span>
-                <span className="font-medium">订阅邮件简报</span>
+                <span className="font-medium">{m.subscribeDigestBold}</span>
                 <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
-                  需配置 Resend 与定时任务；正文摘要来自与侧栏相同的 URL
-                  缓存。关闭后等同于退订（也可通过邮件内退订链接）。
+                  {m.subscribeDigestHelp}
                 </span>
               </span>
             </label>
             <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-              发信频率见仓库{" "}
+              {m.digestCronHintBeforeMono}
               <span className="font-mono text-[10px]">email-digest.yml</span>
-              ；服务端限流见 Edge 配置。
+              {m.digestCronHintAfterMono}
             </p>
           </section>
         </div>
@@ -242,13 +247,13 @@ export function SettingsModal({
             type="button"
             className="flex-1 rounded-lg border border-slate-200 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             onClick={onClose}>
-            取消
+            {m.cancel}
           </button>
           <button
             type="button"
             className="flex-1 rounded-lg bg-sky-600 py-2 text-sm font-medium text-white hover:bg-sky-700 dark:hover:bg-sky-500"
             onClick={save}>
-            保存
+            {m.save}
           </button>
         </div>
       </div>

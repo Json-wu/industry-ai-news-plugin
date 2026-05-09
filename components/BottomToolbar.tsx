@@ -1,15 +1,21 @@
+import { msg } from "../lib/messages"
+
+import { useUiLang } from "./UiLangContext"
+
 type Props = {
   onOpenSettings: () => void
 }
 
 export function BottomToolbar({ onOpenSettings }: Props) {
+  const lang = useUiLang()
+  const m = msg(lang)
   return (
     <div className="flex h-11 shrink-0 items-center justify-end border-t border-slate-200/90 bg-white px-2 dark:border-slate-800 dark:bg-slate-900">
       <button
         type="button"
         className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-        title="设置"
-        aria-label="打开设置"
+        title={m.settingsMenuTitle}
+        aria-label={m.settingsOpenAria}
         onClick={onOpenSettings}>
         <GearIcon className="h-5 w-5" />
       </button>

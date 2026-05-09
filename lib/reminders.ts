@@ -1,16 +1,26 @@
+import { msg } from "./messages"
+import type { UiLang } from "./ui-locale"
+
 export type ReminderMode = "every2h" | "dnd" | "twiceDaily"
 
 export const DEFAULT_REMINDER_MODE: ReminderMode = "every2h"
 
-export const REMINDER_OPTIONS: ReadonlyArray<{
+export function getReminderOptions(lang: UiLang): ReadonlyArray<{
   id: ReminderMode
   label: string
   description: string
-}> = [
-  { id: "every2h", label: "每 2 小时", description: "默认，定时提醒" },
-  { id: "dnd", label: "免打扰", description: "不推送系统提醒" },
-  { id: "twiceDaily", label: "每天 2 次", description: "约 9:00 与 18:00" }
-]
+}> {
+  const m = msg(lang)
+  return [
+    { id: "every2h", label: m.reminderEvery2hLabel, description: m.reminderEvery2hDesc },
+    { id: "dnd", label: m.reminderDndLabel, description: m.reminderDndDesc },
+    {
+      id: "twiceDaily",
+      label: m.reminderTwiceLabel,
+      description: m.reminderTwiceDesc
+    }
+  ]
+}
 
 export function parseReminderMode(v: unknown): ReminderMode {
   if (v === "every2h" || v === "dnd" || v === "twiceDaily") {

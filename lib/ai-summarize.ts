@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { NewsBrief } from "./briefs"
+import { getBrowserLanguageTag, normalizeSummaryLocale } from "./ui-locale"
 
 /** 单次调用 Edge 最多处理的 RSS 条数（控制延迟与费用）。 */
 export const AI_SUMMARY_MAX_ITEMS = 10
@@ -58,7 +59,9 @@ export async function enrichBriefsWithAiSummaries(
     return items
   }
   const slice = rss.slice(0, AI_SUMMARY_MAX_ITEMS)
+  const locale = normalizeSummaryLocale(getBrowserLanguageTag())
   const body = {
+    locale,
     items: slice.map((b) => ({
       url: b.url,
       title: b.title,

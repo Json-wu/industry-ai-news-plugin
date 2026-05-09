@@ -1,9 +1,11 @@
 import { nextOccurrenceMs } from "./lib/alarms-time"
 import { type IndustryId, isIndustryId } from "./lib/industries"
+import { msg } from "./lib/messages"
 import { countNewIds, firstNewBrief, trackedNewsIds } from "./lib/news-delta"
 import { loadNewsForIndustries } from "./lib/news-service"
 import { parseReminderMode } from "./lib/reminders"
 import { STORAGE } from "./lib/storage-keys"
+import { detectUiLang } from "./lib/ui-locale"
 
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
 
@@ -106,18 +108,21 @@ async function maybeNotifyForFreshBriefs() {
 
   const icon = notificationIconUrl()
   const head = firstNewBrief(news.items, prevIds)
-  const titleHint =
-    head && head.title.length > 0
-      ? `「${head.title.slice(0, 48)}${head.title.length > 48 ? "…" : ""}」`
-      : ""
+  const lang = detectUiLang()
+  const m = msg(lang)
+  let titleQuoted = ""
+  if (head?.title && head.title.length > 0) {
+    const t = `${head.title.slice(0, 48)}${head.title.length > 48 ? "…" : ""}`
+    titleQuoted = lang === "zh" ? `「${t}」` : `"${t}" `
+  }
   const message =
     nextNewCount === 1
-      ? titleHint
-        ? `新简报 ${titleHint}点击图标可在侧栏查看。`
-        : "检测到 1 条新行业简报，点击图标可在侧栏查看。"
-      : titleHint
-        ? `共 ${nextNewCount} 条新简报，含 ${titleHint}等。点击图标可在侧栏查看。`
-        : `检测到 ${nextNewCount} 条新行业简报，点击图标可在侧栏查看。`
+      ? titleQuoted
+        ? m.notificationSingleWithTitle(titleQuoted)
+        : m.notificationSingleNoTitle
+      : titleQuoted
+        ? m.notificationMultiWithTitle(nextNewCount, titleQuoted)
+        : m.notificationMultiNoTitle(nextNewCount)
   if (head?.id) {
     await chrome.storage.local.set({
       [STORAGE.pendingDigestFocusNewsId]: head.id

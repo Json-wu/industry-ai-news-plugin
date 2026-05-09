@@ -8,7 +8,10 @@ import {
 } from "react"
 
 import { imageUrlForBrief, type NewsBrief } from "../lib/briefs"
-import { INDUSTRIES } from "../lib/industries"
+import { industryLabel } from "../lib/industries"
+import { msg } from "../lib/messages"
+
+import { useUiLang } from "./UiLangContext"
 
 const PAGE_SIZE = 5
 
@@ -24,11 +27,6 @@ type Props = {
   /** 点击系统通知后传入：滚动到该条并短暂高亮，完成后调用 onDigestFocusConsumed */
   digestFocusNewsId?: string | null
   onDigestFocusConsumed?: () => void
-}
-
-function labelForIndustry(id: string): string {
-  const row = INDUSTRIES.find((i) => i.id === id)
-  return row?.label ?? id
 }
 
 function RowThumb({ url, backupLetter }: { url: string; backupLetter: string }) {
@@ -62,6 +60,8 @@ export function NewsFeed({
   digestFocusNewsId = null,
   onDigestFocusConsumed
 }: Props) {
+  const lang = useUiLang()
+  const m = msg(lang)
   const itemsKey = useMemo(() => items.map((i) => i.id).join(","), [items])
   const [visibleCount, setVisibleCount] = useState(() =>
     Math.min(PAGE_SIZE, items.length)
@@ -209,7 +209,7 @@ export function NewsFeed({
           aria-hidden
         />
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          正在拉取资讯…
+          {m.loadingNews}
         </p>
       </div>
     )
@@ -220,10 +220,10 @@ export function NewsFeed({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            暂无符合已选行业的简报。
+            {m.emptyNews}
           </p>
           <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-            可在设置中调整关注行业。
+            {m.emptyNewsHint}
           </p>
         </div>
       </div>
@@ -244,13 +244,11 @@ export function NewsFeed({
         ) : null}
         {dataSource === "mock" && loadState === "ok" ? (
           <p className="mb-2 text-center text-[10px] text-slate-400 dark:text-slate-500">
-            {userChoseMockOnly
-              ? "已开启「仅使用本地演示数据」，未请求在线 RSS"
-              : "当前为演示数据（在线源不可用或解析失败时回退）"}
+            {userChoseMockOnly ? m.mockBannerUserChose : m.mockBannerFallback}
           </p>
         ) : null}
         <h2 className="mb-3 font-serif text-lg font-bold tracking-wide text-red-600 dark:text-red-400">
-          发现更多
+          {m.discoverMore}
         </h2>
         <ul className="m-0 list-none space-y-3.5 p-0">
           {shown.map((b) => {
@@ -285,7 +283,7 @@ export function NewsFeed({
                   </div>
                   <div className="min-w-0 flex-1 py-0.5 pr-0.5">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
-                      {labelForIndustry(b.industry)}
+                      {industryLabel(b.industry, lang)}
                     </p>
                     <h3 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900 group-hover:text-sky-800 dark:text-slate-100 dark:group-hover:text-sky-300">
                       {b.title}
@@ -307,18 +305,18 @@ export function NewsFeed({
         {hasMore ? (
           <div className="mt-4 flex flex-col items-center gap-2 py-2">
             <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
-              继续向下滑动以加载更多
+              {m.loadMoreScrollHint}
             </p>
             <button
               type="button"
               onClick={loadMore}
               className="text-[12px] font-medium text-sky-600 underline-offset-2 hover:underline dark:text-sky-400">
-              下一页
+              {m.nextPage}
             </button>
           </div>
         ) : (
           <p className="mt-6 text-center text-[11px] text-slate-400 dark:text-slate-500">
-            — 已加载全部 —
+            {m.endOfList}
           </p>
         )}
       </div>

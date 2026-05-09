@@ -11,6 +11,7 @@ import { AppHeader } from "./components/AppHeader"
 import { BottomToolbar } from "./components/BottomToolbar"
 import { NewsFeed } from "./components/NewsFeed"
 import { OnboardingModal } from "./components/OnboardingModal"
+import { UiLangProvider, useUiLang } from "./components/UiLangContext"
 import {
   type SettingsSnapshot,
   SettingsModal
@@ -24,6 +25,7 @@ import {
 } from "./lib/extension-preferences-sync"
 import { type IndustryId, isIndustryId } from "./lib/industries"
 import { enrichBriefsWithAiSummaries } from "./lib/ai-summarize"
+import { msg } from "./lib/messages"
 import { clearNewsCache, loadNewsForIndustries } from "./lib/news-service"
 import { type ReminderMode, parseReminderMode } from "./lib/reminders"
 import { STORAGE } from "./lib/storage-keys"
@@ -32,7 +34,9 @@ import { applyThemeToDocument, parseUiTheme, type UiTheme } from "./lib/theme"
 
 import "./style.css"
 
-function SidePanel() {
+function SidePanelInner() {
+  const lang = useUiLang()
+  const m = msg(lang)
   const [ready, setReady] = useState(false)
   const [onboardingComplete, setOnboardingComplete] = useState(true)
   const [selected, setSelected] = useState<IndustryId[]>([])
@@ -262,7 +266,8 @@ function SidePanel() {
     }
     let cancelled = false
     void loadNewsForIndustries(selected, {
-      mockOnly: newsMockOnly
+      mockOnly: newsMockOnly,
+      lang
     }).then((r) => {
       if (cancelled) {
         return
@@ -288,7 +293,7 @@ function SidePanel() {
     return () => {
       cancelled = true
     }
-  }, [ready, onboardingComplete, selectedKey, selected, newsMockOnly])
+  }, [ready, onboardingComplete, selectedKey, selected, newsMockOnly, lang])
 
   const persistAll = useCallback(
     (snap: {
@@ -402,7 +407,7 @@ function SidePanel() {
   if (!ready) {
     return (
       <div className="flex h-screen w-full min-w-[260px] items-center justify-center bg-slate-50 text-xs text-slate-500 dark:bg-slate-950 dark:text-slate-400">
-        加载中…
+        {m.loadingPanel}
       </div>
     )
   }
@@ -445,4 +450,10 @@ function SidePanel() {
   )
 }
 
-export default SidePanel
+export default function SidePanel() {
+  return (
+    <UiLangProvider>
+      <SidePanelInner />
+    </UiLangProvider>
+  )
+}
