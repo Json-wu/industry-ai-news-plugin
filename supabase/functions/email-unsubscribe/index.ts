@@ -9,10 +9,16 @@ const corsHeaders: Record<string, string> = {
 }
 
 function htmlPage(title: string, body: string): Response {
-  return new Response(
-    `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title></head><body style="font-family:system-ui,sans-serif;padding:2rem;max-width:40rem;line-height:1.6;">${body}</body></html>`,
-    { headers: { "Content-Type": "text/html; charset=utf-8", ...corsHeaders } }
-  )
+  const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title></head><body style="font-family:system-ui,sans-serif;padding:2rem;max-width:40rem;line-height:1.6;">${body}</body></html>`
+  const bytes = new TextEncoder().encode(html)
+  return new Response(bytes, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/html; charset=UTF-8",
+      "Content-Language": "zh-CN",
+      "Cache-Control": "no-store"
+    }
+  })
 }
 
 Deno.serve(async (req) => {
